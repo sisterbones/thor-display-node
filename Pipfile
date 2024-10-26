@@ -1,0 +1,23 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+inky = "~=2.0.0"
+paho-mqtt = "~=2.1.0"
+pillow = "~=10.4.0"
+python-magic = "~=0.4.27"
+python-mpv = "~=1.0.7"
+font-fredoka-one = ">=0.0.1"
+fontawesomefree = "==6.5.1"
+cairosvg = "~=2.7.1"
+qrcode = "~=8.0"
+rich = "~=13.9.2"
+nmcli = "~=1.4.0"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12"
+python_full_version = "3.12.7"
