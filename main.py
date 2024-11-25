@@ -6,6 +6,7 @@ import logging
 import socket
 import time
 import traceback
+import uuid
 from io import BytesIO
 from importlib import resources
 from ipaddress import IPv4Address
@@ -403,15 +404,60 @@ def mqtt_on_message(client, userdata, msg):
         img.draw_header()
         img.show_image(BLACK)
 
+# Get MQTT Broker IP address
+# Following kinda stolen from https://github.com/jholtmann/ip_discovery
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+sock.settimeout(5)
+
+server_address = ('255.255.255.255', 51366)
+message = f'thor_node_broadcast;{uuid.UUID(int=uuid.getnode())}'
+
+try_times = 0
+
+try:
+    draw_splash('Waiting to connect to THOR server...')
+    while True:
+        # Send data
+        log.debug('sending: ' + message)
+        sent = sock.sendto(message.encode(), server_address)
+
+        # Receive response
+        log.debug('waiting to receive')
+        try:
+            data, server = sock.recvfrom(4096)
+        except TimeoutError:
+            log.error('timed out')
+            draw_splash('We\'re having problems connecting.\nERROR: Timed out', COLOUR)
+            continue
+
+        if data.decode('UTF-8') == 'thor_server_response':
+            log.info('Found server to connect to!!')
+            log.info('Server ip: ' + str(server[0]))
+            mqtt_host_ip = str(server[0])
+            break
+        else:
+            log.error('IP verification failed')
+            try_times += 1
+            if try_times == 5:
+                draw_splash('We\'re having problems connecting.')
+
+        print('Trying again...')
+finally:
+    sock.close()
+
+draw_splash(f'Found THOR server. Waiting for response...\nHub IP: {mqtt_host_ip}\nMy IP: {ip_address}')
+
 
 # ~~ INITIALISE MQTT ~~
 try:
-    mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=str(uuid.UUID(int=uuid.getnode())))
     mqttc.on_connect = mqtt_on_connect
     mqttc.on_message = mqtt_on_message
 
     mqttc.username_pw_set(username='thor', password='s9xQMrOGDBWX0')
-    mqttc.connect(environ.get('MQTT_BROKER', 'triangulum.local'), 1883, 60)
+    mqttc.connect(environ.get('MQTT_BROKER', mqtt_host_ip), 1883, 60)
     mqttc.loop_forever()
 except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError) as error:
     draw_splash(f"Connection failed!\n{error}", COLOUR)
