@@ -28,6 +28,9 @@ import paho.mqtt.client as mqtt
 from rich import print as rprint
 from rich.logging import RichHandler
 
+# Modules from this folder
+import config
+
 # We're not controlling everything, this package doesn't need root.
 # nmcli.disable_use_sudo()
 
@@ -456,7 +459,7 @@ try:
     mqttc.on_connect = mqtt_on_connect
     mqttc.on_message = mqtt_on_message
 
-    mqttc.username_pw_set(username='thor', password='s9xQMrOGDBWX0')
+    mqttc.username_pw_set(username='service', password=config.get("password"))
     mqttc.connect(environ.get('MQTT_BROKER', mqtt_host_ip), 1883, 60)
     mqttc.loop_forever()
 except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError) as error:
