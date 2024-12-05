@@ -19,7 +19,7 @@ import magic
 import nmcli
 from cairosvg import svg2png
 from PIL.ImageFont import FreeTypeFont
-from font_fredoka_one import FredokaOne
+#from font_fredoka_one import FredokaOne
 from inky import auto
 from inky.eeprom import read_eeprom
 from inky.mock import InkyMockPHAT, InkyMockPHATSSD1608, InkyMockWHAT, InkyMockImpression
@@ -42,10 +42,10 @@ logging.basicConfig(
 log = logging.getLogger("rich")
 
 # ~~ GET IP ADDRESS AND HOSTNAME ~~
-ip_address = IPv4Address(nmcli.connection.show(nmcli.connection()[0].name)['IP4.ADDRESS[1]'].split('/')[0])
-hostname = gethostname()
-log.info(f"My IP address is {ip_address}")
-log.info(f"My hostname is {hostname}")
+# ip_address = IPv4Address(nmcli.connection.show(nmcli.connection()[0].name)['IP4.ADDRESS[1]'].split('/')[0])
+# hostname = gethostname()
+# log.info(f"My IP address is {ip_address}")
+# log.info(f"My hostname is {hostname}")
 
 # ~~ INIT INKY DISPLAY ~~
 try:
@@ -317,7 +317,7 @@ class EPaperImage:
 
 
 # Show the initial splash page
-draw_splash(f"Hi! I'm {ip_address}\nWaiting for connection...")
+draw_splash(f"Hi! I'm {config.get("MY_IP")}\nWaiting for connection...")
 
 # Initialise variables
 alerts = []
@@ -407,51 +407,6 @@ def mqtt_on_message(client, userdata, msg):
         img.draw_header()
         img.show_image(BLACK)
 
-# Get MQTT Broker IP address
-# Following kinda stolen from https://github.com/jholtmann/ip_discovery
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-sock.settimeout(5)
-
-server_address = ('255.255.255.255', 51366)
-message = f'thor_node_broadcast;{uuid.UUID(int=uuid.getnode())}'
-
-try_times = 0
-
-try:
-    draw_splash('Waiting to connect to THOR server...')
-    while True:
-        # Send data
-        log.debug('sending: ' + message)
-        sent = sock.sendto(message.encode(), server_address)
-
-        # Receive response
-        log.debug('waiting to receive')
-        try:
-            data, server = sock.recvfrom(4096)
-        except TimeoutError:
-            log.error('timed out')
-            draw_splash('We\'re having problems connecting.\nERROR: Timed out', COLOUR)
-            continue
-
-        if data.decode('UTF-8') == 'thor_server_response':
-            log.info('Found server to connect to!!')
-            log.info('Server ip: ' + str(server[0]))
-            mqtt_host_ip = str(server[0])
-            break
-        else:
-            log.error('IP verification failed')
-            try_times += 1
-            if try_times == 5:
-                draw_splash('We\'re having problems connecting.')
-
-        print('Trying again...')
-finally:
-    sock.close()
-
-draw_splash(f'Found THOR server. Waiting for response...\nHub IP: {mqtt_host_ip}\nMy IP: {ip_address}')
-
 
 # ~~ INITIALISE MQTT ~~
 try:
@@ -459,12 +414,13 @@ try:
     mqttc.on_connect = mqtt_on_connect
     mqttc.on_message = mqtt_on_message
 
-    mqttc.username_pw_set(username='service', password=config.get("password"))
-    mqttc.connect(environ.get('MQTT_BROKER', mqtt_host_ip), 1883, 60)
+    mqttc.username_pw_set(username=config.get("MQTT_USERNAME"), password=config.get("MQTT_PASSWORD"))
+    mqttc.connect(environ.get('MQTT_BROKER', config.get("MQTT_IP")), config.get("MQTT_PORT", 1883), 60)
     mqttc.loop_forever()
-except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError) as error:
+except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError, ValueError) as error:
     draw_splash(f"Connection failed!\n{error}", COLOUR)
     log.exception(str(error))
+    config.init()
 except Exception as error:
     draw_splash(f"{error}", COLOUR)
     log.exception(str(error))
