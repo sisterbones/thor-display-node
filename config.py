@@ -81,7 +81,7 @@ def init():
     # Now grab MQTT credentials
     registration = requests.get("http://"+get("HUB_IP")+":"+get("HUB_PORT")+"/api/node/register/"+str(uuid.UUID(int=uuid.getnode())))
     data = registration.json()
-    set("MQTT_IP", get("HUB_IP"))
+    set("MQTT_IP", data.get('mqtt').get('host', get("HUB_IP")))
     set("MQTT_PORT", data.get("mqtt").get("port"))
     set("MQTT_USERNAME", data.get("mqtt").get("username"))
     set("MQTT_PASSWORD", data.get("mqtt").get("password"))

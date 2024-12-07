@@ -317,7 +317,7 @@ class EPaperImage:
 
 
 # Show the initial splash page
-draw_splash(f"Hi! I'm {config.get("MY_IP")}\nWaiting for connection...")
+draw_splash(f"Hi! I'm {config.get('MY_IP')}\nWaiting for connection...")
 
 # Initialise variables
 alerts = []
@@ -332,7 +332,7 @@ def mqtt_on_connect(client, userdata, flags, reason_code, properties):
     client.subscribe('thor/alerts')
     client.subscribe('thor/weather')
     # ask for weather data
-    client.publish("thor/ask", "Looking for data.", qos=1)
+    client.publish("thor/ask", "weather,alerts", qos=1)
 
 def mqtt_on_message(client, userdata, msg):
     global alerts, weather
@@ -360,6 +360,7 @@ def mqtt_on_message(client, userdata, msg):
         if msg.topic == "thor/alerts":
             alerts.append(content)
 
+    img.temperature = weather.get("temperature", 0.0)
     img.temperature = weather.get("temperature", 0.0)
     img.header_headline = weather.get("headline", "Unknown")
     if not img.header_icon: img.header_icon = weather.get("icon", None)
