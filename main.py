@@ -41,11 +41,26 @@ logging.basicConfig(
 )
 log = logging.getLogger("rich")
 
+def get_ip():
+    # https://stackoverflow.com/a/28950776
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.254.254.254', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
 # ~~ GET IP ADDRESS AND HOSTNAME ~~
-# ip_address = IPv4Address(nmcli.connection.show(nmcli.connection()[0].name)['IP4.ADDRESS[1]'].split('/')[0])
-# hostname = gethostname()
-# log.info(f"My IP address is {ip_address}")
-# log.info(f"My hostname is {hostname}")
+ip_address = get_ip()
+config.set("MY_IP", ip_address)
+hostname = gethostname()
+log.info(f"My IP address is {ip_address}")
+log.info(f"My hostname is {hostname}")
 
 # ~~ INIT INKY DISPLAY ~~
 try:
@@ -136,6 +151,9 @@ def get_wrapped_text(text: str, font: FreeTypeFont,
         return '\n'.join(lines)
 
 def draw_text(text, draw, x=0, y=0, font_to_use: FreeTypeFont = font, colour=BLACK, align="left", baseline="top", wrap_px = 0, no_wrap=False):
+    if text is None:
+        return
+
     if wrap_px >= 1 and not no_wrap:
         text = get_wrapped_text(text, font_to_use, wrap_px)
 
@@ -338,18 +356,21 @@ def mqtt_on_message(client, userdata, msg):
     global alerts, weather
     log.info(f"Recieved message. Topic: {msg.topic}")
     content = BytesIO(msg.payload)
-    content_snippet = content.read(2048)
+    content_snippet = content.read(4096)
     content.seek(0)
     payload_mime_type = magic.from_buffer(content_snippet, mime=True)
 
     img = EPaperImage()
     severe = False
 
+    log.debug(f"Payload type: {payload_mime_type}")
+    log.debug(f"Message content: {content.read()}")
+    content.seek(0)
+
     if payload_mime_type.endswith("/json"):
         content = json.loads(content.read().decode('utf8'))
         if "icon" in content and not ("alert_type" in content):
             img.header_icon = content.get('icon', None)
-        log.debug(f"Message content: {content}")
         if "timestamp" in content:
             img.timestamp = content.get('timestamp', time.time())
         if msg.topic == "thor/weather":
@@ -358,7 +379,10 @@ def mqtt_on_message(client, userdata, msg):
                 weather = content.get('weather')
                 weather['icon'] = img.header_icon
         if msg.topic == "thor/alerts":
-            alerts.append(content)
+            if content.get("refresh", False):
+                alerts = content.get("alerts", [])
+            else:
+                alerts.append(content)
 
     img.temperature = weather.get("temperature", 0.0)
     img.temperature = weather.get("temperature", 0.0)
@@ -408,24 +432,44 @@ def mqtt_on_message(client, userdata, msg):
         img.draw_header()
         img.show_image(BLACK)
 
+mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=str(uuid.UUID(int=uuid.getnode())))
+mqttc.on_connect = mqtt_on_connect
+mqttc.on_message = mqtt_on_message
 
-# ~~ INITIALISE MQTT ~~
-try:
-    mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=str(uuid.UUID(int=uuid.getnode())))
-    mqttc.on_connect = mqtt_on_connect
-    mqttc.on_message = mqtt_on_message
-
+def main():
     mqttc.username_pw_set(username=config.get("MQTT_USERNAME"), password=config.get("MQTT_PASSWORD"))
     mqttc.connect(environ.get('MQTT_BROKER', config.get("MQTT_IP")), config.get("MQTT_PORT", 1883), 60)
     mqttc.loop_forever()
-except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError, ValueError) as error:
-    draw_splash(f"Connection failed!\n{error}", COLOUR)
-    log.exception(str(error))
-    config.init()
-except Exception as error:
-    draw_splash(f"{error}", COLOUR)
-    log.exception(str(error))
 
-# while True:
-#     pass
-# time.sleep(5)
+crashes = 0
+crash_threshold = 5
+
+err = Exception("We don't know!!")
+
+# ~~ INITIALISE MQTT ~~
+while True:
+    try:
+        err = Exception("We don't know!!")
+        main()
+    except (socket.gaierror, ConnectionRefusedError, TimeoutError, OSError, ValueError) as error:
+        err = error
+        draw_splash(f"Connection failed!\n{error}", COLOUR)
+        log.exception(str(error))
+        log.info("The following information might be useful:\nHUB IP: %s:%s\nMQTT IP: %s", config.get("HUB_IP"), config.get("HUB_PORT"), config.get("MQTT_IP"))
+        config.init()
+    except Exception as error:
+        err = error
+        draw_splash(f"{error}", COLOUR)
+        log.exception(str(error))
+    finally:
+        crashes += 1
+        log.warning("Something caused the main script to crash. Error: %s\nWaiting five seconds...", err)
+
+        if crashes > crash_threshold:
+            log.critical("I have crashed more than five times. Exiting...")
+            break
+        elif abs(crash_threshold - crashes) < 2:
+            log.critical("I have crashed more than three times.")
+        else:
+            log.warning("I have crashed %s times so far.", crashes)
+        time.sleep(5)

@@ -66,7 +66,6 @@ def init():
                     f'Found THOR server. Waiting for response...\nHub IP: {hub_ip}:{results[2].split(":")[1]}\nMy IP: {results[1].split(":")[1]}')
                 set("HUB_IP", hub_ip)
                 set("HUB_PORT", results[2].split(":")[1])
-                set("MY_IP", results[1].split(":")[1])
                 break
             else:
                 log.error('IP verification failed')
