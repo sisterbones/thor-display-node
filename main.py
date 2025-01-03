@@ -356,7 +356,7 @@ def mqtt_on_message(client, userdata, msg):
     global alerts, weather
     log.info(f"Recieved message. Topic: {msg.topic}")
     content = BytesIO(msg.payload)
-    content_snippet = content.read(4096)
+    content_snippet = content.read()
     content.seek(0)
     payload_mime_type = magic.from_buffer(content_snippet, mime=True)
 
