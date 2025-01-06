@@ -19,7 +19,6 @@ import magic
 import nmcli
 from cairosvg import svg2png
 from PIL.ImageFont import FreeTypeFont
-#from font_fredoka_one import FredokaOne
 from inky import auto
 from inky.eeprom import read_eeprom
 from inky.mock import InkyMockPHAT, InkyMockPHATSSD1608, InkyMockWHAT, InkyMockImpression
